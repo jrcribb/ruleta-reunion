@@ -17,6 +17,10 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   canvas { background:#fff; border-radius:50%; box-shadow:0 0 12px rgba(0,0,0,.12) inset; }
 
   .overlay { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; font-size:20px; font-weight:bold; background:#2E2F38; padding:6px 10px; border-radius:10px; display:none; color:#fff; text-align:center; }
+  .conclusion-panel { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.55); z-index:30; }
+  .conclusion-card { background:#1f2026; color:#fff; border-radius:12px; padding:18px; min-width:280px; box-shadow:0 10px 35px rgba(0,0,0,.45); text-align:center; }
+  .conclusion-card h2 { margin:0 0 8px; }
+  .conclusion-card p { margin:0 0 14px; color:#ddd; }
 
   button { padding:6px 12px; margin:4px; font-size:14px; border-radius:5px; border:0; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.12); background:#666; color:#fff; }
   button.icon-btn { background:transparent; box-shadow:none; padding:4px; border-radius:6px; cursor:pointer;}
@@ -154,6 +158,14 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   </div>
 </dialog>
 
+<div id="conclusionPanel" class="conclusion-panel" aria-live="polite" aria-modal="true" role="dialog" aria-label="Conclusión de la reunión">
+  <div class="conclusion-card">
+    <h2>Conclusión</h2>
+    <p>Todos los participantes ya tuvieron su turno.</p>
+    <button id="btnNewMeeting" type="button">Iniciar nueva reunión</button>
+  </div>
+</div>
+
 <script>
   // --- Config / Estado ---
     const STORAGE_ROOT = "ruleta-reunion";
@@ -233,6 +245,8 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   const durInput=document.getElementById("durInput");
   const btnSaveDur=document.getElementById("btnSaveDur");
   const btnSpin=document.getElementById("btnSpin");
+  const conclusionPanel=document.getElementById("conclusionPanel");
+  const btnNewMeeting=document.getElementById("btnNewMeeting");
 
   // duración en minutos (persistida)
   let duracionMin = parseInt(readStore().duracion || DEFAULT_DURATION);
@@ -241,6 +255,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
   // reunión: arrancan al primer giro
   let meetingStarted = false;
+  let reunionFinalizada = false;
 
   // --- Flip Clock (progresivo HH:MM) ---
   let globalSecs = 0;
@@ -311,6 +326,43 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
         updateBatteryUI();
       }
     }, 1000);
+  }
+
+  function showConclusionPanel(){
+    reunionFinalizada = true;
+    conclusionPanel.style.display = "flex";
+  }
+
+  function hideConclusionPanel(){
+    reunionFinalizada = false;
+    conclusionPanel.style.display = "none";
+  }
+
+  function resetMeetingState(){
+    hideConclusionPanel();
+    sorteadosSession = new Set();
+    ultimoSorteado = null;
+    resetCrono();
+
+    if (flipClockInterval) {
+      clearInterval(flipClockInterval);
+      flipClockInterval = null;
+    }
+    globalSecs = 0;
+    updateFlipClockFromSecs(0);
+
+    if (batteryInterval) {
+      clearInterval(batteryInterval);
+      batteryInterval = null;
+    }
+    batteryTotalSecs = duracionMin * 60;
+    batteryRemaining = batteryTotalSecs;
+    updateBatteryUI();
+
+    meetingStarted = false;
+    actualizarGeometria();
+    rebuildEditor();
+    dibujarRuleta();
   }
 
   // --- Storage / carga participantes (compatibilidad con versiones previas) ---
@@ -601,7 +653,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
   // --- giro / mostrar ganador / centrado animado ---
   function girarRuleta(){
-    if (girando || centrando) return;
+    if (girando || centrando || reunionFinalizada) return;
     
     // EXCLUSIÓN AL INICIAR NUEVO GIRO: El ganador anterior pasa a sorteadosSession
     if (ultimoSorteado) {
@@ -620,13 +672,9 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     if (activosList.length === 0) { 
         const allActives = participantes.filter(p => p.activo);
         if (allActives.length > 0) {
-            // Todos los activos ya fueron sorteados. Reiniciar el ciclo temporal.
-            sorteadosSession = new Set();
-            activosList = allActives;
-            
-            actualizarGeometria();
-            rebuildEditor();
-            dibujarRuleta();
+        // Esperar acción explícita del usuario para iniciar nueva reunión
+        showConclusionPanel();
+        return;
         } else {
             // No hay participantes activos en absoluto
             dibujarRuleta(); 
@@ -680,6 +728,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     // Iniciar cronómetro y actualizar editor
     startCronoFor(ganador);
     rebuildEditor();
+
+    // Si era el último participante pendiente, mostrar conclusión.
+    if (activosList.length === 1) {
+      showConclusionPanel();
+    }
   }
 
   // Animación de desaceleración final y centrado (MODIFICACIÓN CLAVE)
@@ -770,6 +823,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     }
   });
   btnSpin.addEventListener("click", girarRuleta);
+  btnNewMeeting.addEventListener("click", resetMeetingState);
 
   // --- duración / storage ---
   btnSaveDur.addEventListener("click", ()=>{
