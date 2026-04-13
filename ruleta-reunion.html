@@ -142,6 +142,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
       <button id="btnSaveDur">Guardar duración</button>
     </div>
 
+    <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+      <label for="absentInput">Umbral ausente (seg):</label>
+      <input id="absentInput" type="number" min="1" value="10"/>
+    </div>
+
     <div class="dialog-header">
       <strong>Editar participantes</strong>
     </div>
@@ -169,8 +174,9 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
 <script>
   // --- Config / Estado ---
-    const STORAGE_ROOT = "ruleta-reunion";
+  const STORAGE_ROOT = "ruleta-reunion";
   const DEFAULT_DURATION = "45";
+  const DEFAULT_ABSENT_SECONDS = "10";
   const DEFAULT_NAMES = []; 
   let ultimoSorteado = null; 
 
@@ -244,6 +250,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   const btnSave=document.getElementById("btnSave");
   const messages=document.getElementById("messages");
   const durInput=document.getElementById("durInput");
+  const absentInput=document.getElementById("absentInput");
   const btnSaveDur=document.getElementById("btnSaveDur");
   const btnSpin=document.getElementById("btnSpin");
   const conclusionPanel=document.getElementById("conclusionPanel");
@@ -253,7 +260,10 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   // duración en minutos (persistida)
   let duracionMin = parseInt(readStore().duracion || DEFAULT_DURATION);
   if (!Number.isFinite(duracionMin) || duracionMin < 1) duracionMin = parseInt(DEFAULT_DURATION);
+  let absentThresholdSec = parseInt(readStore().ausenteSegundos || DEFAULT_ABSENT_SECONDS);
+  if (!Number.isFinite(absentThresholdSec) || absentThresholdSec < 1) absentThresholdSec = parseInt(DEFAULT_ABSENT_SECONDS);
   durInput.value = duracionMin;
+  absentInput.value = absentThresholdSec;
 
   // reunión: arrancan al primer giro
   let meetingStarted = false;
@@ -339,7 +349,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
     activosList.forEach(p => {
       const secs = Math.max(0, Math.floor(spokenSecondsById[p.id] || 0));
-      if (secs < 10) {
+      if (secs < absentThresholdSec) {
         ausentes.push({ nombre: p.nombre, segundos: secs });
       } else {
         ranking.push({ nombre: p.nombre, segundos: secs });
@@ -351,10 +361,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
     const fmt = (secs) => `${String(Math.floor(secs/60)).padStart(2,"0")}:${String(secs%60).padStart(2,"0")}`;
     const rankingHtml = ranking.length
-      ? `<strong>Participación (mayor a menor):</strong><br>${ranking.map((p, i) => `${i+1}. ${p.nombre} - ${fmt(p.segundos)}`).join("<br>")}`
-      : `<strong>Participación:</strong><br>Sin intervenciones de 10s o más.`;
+      ? `<strong>Participación (mayor a menor):</strong><br>${ranking.map((p, i) => `${i+1}. ${fmt(p.segundos)} - ${p.nombre}`).join("<br>")}`
+      : `<strong>Participación:</strong><br>Sin intervenciones de ${absentThresholdSec}s o más.`;
+    const ausentesTitulo = ausentes.length === 1 ? "Ausente" : "Ausentes";
     const ausentesHtml = ausentes.length
-      ? `<br><br><strong>Ausentes (&lt; 10s):</strong><br>${ausentes.map(p => `${p.nombre} - ${fmt(p.segundos)}`).join("<br>")}`
+      ? `<br><br><strong>${ausentesTitulo}:</strong><br>${ausentes.map(p => `${fmt(p.segundos)} - ${p.nombre}`).join("<br>")}`
       : "";
     conclusionSummary.innerHTML = `${rankingHtml}${ausentesHtml}`;
 
@@ -866,10 +877,13 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   // --- duración / storage ---
   btnSaveDur.addEventListener("click", ()=>{
     const v = parseInt(durInput.value || DEFAULT_DURATION);
+    const aus = parseInt(absentInput.value || DEFAULT_ABSENT_SECONDS);
     if (isNaN(v) || v < 1) { showMessage("Duración inválida", true); return; }
+    if (isNaN(aus) || aus < 1) { showMessage("Umbral ausente inválido", true); return; }
     duracionMin = v;
-    if (!writeStore({ duracion: duracionMin })) {
-      showMessage("No se pudo guardar duración", true);
+    absentThresholdSec = aus;
+    if (!writeStore({ duracion: duracionMin, ausenteSegundos: absentThresholdSec })) {
+      showMessage("No se pudo guardar configuración", true);
       return;
     }
     // Si la reunión aún no empezó, actualizo la batería inicial mostrada
@@ -878,7 +892,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
       batteryRemaining = batteryTotalSecs;
       updateBatteryUI();
     }
-    showMessage("Duración guardada: " + duracionMin + " min");
+    showMessage("Configuración guardada");
   });
 
   window.addEventListener("storage", (e) => {
@@ -894,6 +908,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
           batteryRemaining = batteryTotalSecs;
           updateBatteryUI();
         }
+      }
+      const newAus = parseInt(stored.ausenteSegundos || DEFAULT_ABSENT_SECONDS);
+      if (Number.isFinite(newAus) && newAus >= 1) {
+        absentThresholdSec = newAus;
+        absentInput.value = absentThresholdSec;
       }
       // Sincronizar participantes
       loadParticipantsFromStorage();
