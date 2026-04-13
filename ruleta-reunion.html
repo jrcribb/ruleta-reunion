@@ -165,7 +165,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
 <div id="conclusionPanel" class="conclusion-panel" aria-live="polite" aria-modal="true" role="dialog" aria-label="Conclusión de la reunión">
   <div class="conclusion-card">
-    <h2>Conclusión</h2>
+    <h2>Conclusión</h2><b></b>
     <p>Todos los participantes ya tuvieron su turno.</p>
     <div id="conclusionSummary" class="small" style="text-align:left; margin:0 0 12px;"></div>
     <button id="btnNewMeeting" type="button">Iniciar nueva reunión</button>
@@ -350,7 +350,8 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     activosList.forEach(p => {
       const secs = Math.max(0, Math.floor(spokenSecondsById[p.id] || 0));
       if (secs < absentThresholdSec) {
-        ausentes.push({ nombre: p.nombre, segundos: secs });
+        //ausentes.push({ nombre: p.nombre, segundos: secs });
+        ausentes.push({ nombre: p.nombre });
       } else {
         ranking.push({ nombre: p.nombre, segundos: secs });
       }
@@ -361,11 +362,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
     const fmt = (secs) => `${String(Math.floor(secs/60)).padStart(2,"0")}:${String(secs%60).padStart(2,"0")}`;
     const rankingHtml = ranking.length
-      ? `<strong>Participación (mayor a menor):</strong><br>${ranking.map((p, i) => `${i+1}. ${fmt(p.segundos)} - ${p.nombre}`).join("<br>")}`
+      ? `<strong>Participación:</strong><br>${ranking.map((p, i) => `${i+1}. ${fmt(p.segundos)} - ${p.nombre}`).join("<br>")}`
       : `<strong>Participación:</strong><br>Sin intervenciones de ${absentThresholdSec}s o más.`;
     const ausentesTitulo = ausentes.length === 1 ? "Ausente" : "Ausentes";
     const ausentesHtml = ausentes.length
-      ? `<br><br><strong>${ausentesTitulo}:</strong><br>${ausentes.map(p => `${fmt(p.segundos)} - ${p.nombre}`).join("<br>")}`
+      ? `<br><br><strong>${ausentesTitulo}:</strong><br>${ausentes.map(p => `${p.nombre}`).join("<br>")}`
       : "";
     conclusionSummary.innerHTML = `${rankingHtml}${ausentesHtml}`;
 
