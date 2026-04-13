@@ -156,8 +156,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
 <script>
   // --- Config / Estado ---
-  const STORAGE_KEY = "ruleta_participantes_v3"; 
-  const STORAGE_DURACION = "ruleta_duracion_total";
+    const STORAGE_ROOT = "ruleta-reunion";
   const DEFAULT_DURATION = "45";
   const DEFAULT_NAMES = []; 
   let ultimoSorteado = null; 
@@ -168,21 +167,34 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     return Date.now().toString(36)+Math.random().toString(36).slice(2,8); 
   }
   function cleanName(s){ return (s||"").trim(); }
-  function safeStorageGet(key, fallback = null){
+  function readStore(){
     try {
-      const value = localStorage.getItem(key);
-      return value === null ? fallback : value;
-    } catch (e) {
-      return fallback;
-    }
+      const raw = localStorage.getItem(STORAGE_ROOT);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : {};
+    } catch(e) { return {}; }
   }
-  function safeStorageSet(key, value){
+  function writeStore(data){
     try {
-      localStorage.setItem(key, value);
+      const current = readStore();
+      localStorage.setItem(STORAGE_ROOT, JSON.stringify(Object.assign({}, current, data)));
       return true;
-    } catch (e) {
-      return false;
-    }
+    } catch(e) { return false; }
+  }
+  function migrateFromLegacyStorage(){
+    try {
+      if (localStorage.getItem(STORAGE_ROOT) !== null) return;
+      const oldPart = localStorage.getItem("ruleta_participantes_v3");
+      const oldDur  = localStorage.getItem("ruleta_duracion_total");
+      if (!oldPart && !oldDur) return;
+      const migrated = {};
+      if (oldPart) { try { migrated.participantes = JSON.parse(oldPart); } catch(e){} }
+      if (oldDur)  { const d = parseInt(oldDur); if (Number.isFinite(d) && d >= 1) migrated.duracion = d; }
+      localStorage.setItem(STORAGE_ROOT, JSON.stringify(migrated));
+      localStorage.removeItem("ruleta_participantes_v3");
+      localStorage.removeItem("ruleta_duracion_total");
+    } catch(e) {}
   }
 
   // participantes
@@ -223,7 +235,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   const btnSpin=document.getElementById("btnSpin");
 
   // duración en minutos (persistida)
-  let duracionMin = parseInt(safeStorageGet(STORAGE_DURACION, DEFAULT_DURATION) || DEFAULT_DURATION);
+  let duracionMin = parseInt(readStore().duracion || DEFAULT_DURATION);
   if (!Number.isFinite(duracionMin) || duracionMin < 1) duracionMin = parseInt(DEFAULT_DURATION);
   durInput.value = duracionMin;
 
@@ -303,16 +315,14 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
   // --- Storage / carga participantes (compatibilidad con versiones previas) ---
   function loadParticipantsFromStorage(){ 
-    let raw=null; 
-    try{ raw=localStorage.getItem(STORAGE_KEY);}catch(e){raw=null;} 
-    if(!raw){ 
+    const rawList = readStore().participantes;
+    if(!Array.isArray(rawList)){ 
       participantes = DEFAULT_NAMES.map(n => ({ id: uid(), nombre: n, activo: true, tiempo: 5 }));
       return;
     } 
     try{ 
-      const parsed=JSON.parse(raw); 
-      if(!Array.isArray(parsed)) throw new Error("no-array"); 
-      participantes = parsed.map(it => {
+      if(rawList.length === 0) throw new Error("empty");
+      participantes = rawList.map(it => {
         // soporta formatos antiguos (string, objeto sin campos nuevos)
         if (typeof it === "string") {
           return { id: uid(), nombre: it, activo: true, tiempo: 5 };
@@ -337,10 +347,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   }
 
   function saveParticipantsToStorage(){ 
-    try{
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(participantes));
+    if (writeStore({ participantes })) {
       showMessage("Guardado correctamente.");
-    }catch(e){ console.error(e); showMessage("No se pudo guardar: "+e,true); }
+    } else {
+      showMessage("No se pudo guardar.", true);
+    }
   }
 
   // --- UI editor ---
@@ -765,7 +776,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     const v = parseInt(durInput.value || DEFAULT_DURATION);
     if (isNaN(v) || v < 1) { showMessage("Duración inválida", true); return; }
     duracionMin = v;
-    if (!safeStorageSet(STORAGE_DURACION, String(duracionMin))) {
+    if (!writeStore({ duracion: duracionMin })) {
       showMessage("No se pudo guardar duración", true);
       return;
     }
@@ -779,26 +790,31 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   });
 
   window.addEventListener("storage", (e) => {
-    if (e.key === STORAGE_KEY) {
+    if (e.key === STORAGE_ROOT) {
+      const stored = readStore();
+      // Sincronizar duración
+      const newDur = parseInt(stored.duracion || DEFAULT_DURATION);
+      if (Number.isFinite(newDur) && newDur >= 1) {
+        duracionMin = newDur;
+        durInput.value = duracionMin;
+        if (!meetingStarted) {
+          batteryTotalSecs = duracionMin * 60;
+          batteryRemaining = batteryTotalSecs;
+          updateBatteryUI();
+        }
+      }
+      // Sincronizar participantes
       loadParticipantsFromStorage();
       sorteadosSession = new Set();
-      ultimoSorteado = null; 
+      ultimoSorteado = null;
       rebuildEditor();
       actualizarGeometria();
       dibujarRuleta();
-    } else if (e.key === STORAGE_DURACION) {
-      duracionMin = parseInt(safeStorageGet(STORAGE_DURACION, DEFAULT_DURATION) || DEFAULT_DURATION);
-      if (!Number.isFinite(duracionMin) || duracionMin < 1) duracionMin = parseInt(DEFAULT_DURATION);
-      durInput.value = duracionMin;
-      if (!meetingStarted) {
-        batteryTotalSecs = duracionMin * 60;
-        batteryRemaining = batteryTotalSecs;
-        updateBatteryUI();
-      }
     }
   });
 
   // Init
+  migrateFromLegacyStorage();
   loadParticipantsFromStorage();
   sorteadosSession = new Set();
   ultimoSorteado = null; 
