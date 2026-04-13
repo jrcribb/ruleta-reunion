@@ -20,6 +20,8 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
   button { padding:6px 12px; margin:4px; font-size:14px; border-radius:5px; border:0; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.12); background:#666; color:#fff; }
   button.icon-btn { background:transparent; box-shadow:none; padding:4px; border-radius:6px; cursor:pointer;}
+  .spin-btn { background:#d32f2f; color:#fff; font-weight:bold; }
+  .spin-btn:focus-visible, canvas:focus-visible { outline:3px solid #FFD54F; outline-offset:3px; }
 
   dialog { border-radius:8px; border:none; box-shadow:0 10px 40px rgba(0,0,0,.5); }
   .dialog-content { padding:14px; width:420px; background:#1f2026; color:#eee; }
@@ -84,6 +86,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
         </g>
     </svg>
   </button>
+  <button id="btnSpin" class="spin-btn" type="button" aria-label="Girar ruleta">Girar</button>
   </div>
 
   <div id="ruletaContainer" style="
@@ -97,6 +100,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     
     <canvas id="ruleta" width="800" height="800" role="button"
       aria-label="Ruleta - hacer clic en el triángulo rojo para girar"
+      tabindex="0"
       style="
         max-width: min(800px, 100vw - 50px);
         max-height: min(800px, 100vh - 50px);
@@ -164,6 +168,22 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     return Date.now().toString(36)+Math.random().toString(36).slice(2,8); 
   }
   function cleanName(s){ return (s||"").trim(); }
+  function safeStorageGet(key, fallback = null){
+    try {
+      const value = localStorage.getItem(key);
+      return value === null ? fallback : value;
+    } catch (e) {
+      return fallback;
+    }
+  }
+  function safeStorageSet(key, value){
+    try {
+      localStorage.setItem(key, value);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
 
   // participantes
   let participantes = [];
@@ -200,9 +220,11 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   const messages=document.getElementById("messages");
   const durInput=document.getElementById("durInput");
   const btnSaveDur=document.getElementById("btnSaveDur");
+  const btnSpin=document.getElementById("btnSpin");
 
   // duración en minutos (persistida)
-  let duracionMin = parseInt(localStorage.getItem(STORAGE_DURACION) || DEFAULT_DURATION);
+  let duracionMin = parseInt(safeStorageGet(STORAGE_DURACION, DEFAULT_DURATION) || DEFAULT_DURATION);
+  if (!Number.isFinite(duracionMin) || duracionMin < 1) duracionMin = parseInt(DEFAULT_DURATION);
   durInput.value = duracionMin;
 
   // reunión: arrancan al primer giro
@@ -467,9 +489,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
         ctx.beginPath(); ctx.arc(center, center, r, 0, 2*Math.PI); ctx.fillStyle = "#FFC300"; ctx.fill();
         ctx.fillStyle = "#111"; ctx.font = "bold 16px Arial"; ctx.textAlign = "center";
         ctx.fillText("¡Ciclo completado!", center, center - 20);
-        ctx.fillText("Presiona para reiniciar el sorteo", center, center + 20);
-        // Recarga de página al terminar
-        window.location.reload(true);
+        ctx.fillText("Pulsa Girar para reiniciar ciclo", center, center + 20);
       }
     } else {
       activosList.forEach((p,i) => {
@@ -718,13 +738,37 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     const triY3 = topY - pointerGap;
     if (x >= triX1 && x <= triX2 && y >= triY1 && y <= triY3) { girarRuleta(); }
   });
+  canvas.addEventListener("keydown", function(e){
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      girarRuleta();
+    }
+  });
+  document.addEventListener("keydown", function(e){
+    const target = e.target;
+    const isEditable = target && (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable
+    );
+    if (isEditable) return;
+    if (e.key === "g" || e.key === "G") {
+      e.preventDefault();
+      girarRuleta();
+    }
+  });
+  btnSpin.addEventListener("click", girarRuleta);
 
   // --- duración / storage ---
   btnSaveDur.addEventListener("click", ()=>{
     const v = parseInt(durInput.value || DEFAULT_DURATION);
     if (isNaN(v) || v < 1) { showMessage("Duración inválida", true); return; }
     duracionMin = v;
-    localStorage.setItem(STORAGE_DURACION, duracionMin);
+    if (!safeStorageSet(STORAGE_DURACION, String(duracionMin))) {
+      showMessage("No se pudo guardar duración", true);
+      return;
+    }
     // Si la reunión aún no empezó, actualizo la batería inicial mostrada
     if (!meetingStarted) {
       batteryTotalSecs = duracionMin * 60;
@@ -743,7 +787,8 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
       actualizarGeometria();
       dibujarRuleta();
     } else if (e.key === STORAGE_DURACION) {
-      duracionMin = parseInt(localStorage.getItem(STORAGE_DURACION) || DEFAULT_DURATION);
+      duracionMin = parseInt(safeStorageGet(STORAGE_DURACION, DEFAULT_DURATION) || DEFAULT_DURATION);
+      if (!Number.isFinite(duracionMin) || duracionMin < 1) duracionMin = parseInt(DEFAULT_DURATION);
       durInput.value = duracionMin;
       if (!meetingStarted) {
         batteryTotalSecs = duracionMin * 60;
