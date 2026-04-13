@@ -162,6 +162,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   <div class="conclusion-card">
     <h2>Conclusión</h2>
     <p>Todos los participantes ya tuvieron su turno.</p>
+    <div id="conclusionSummary" class="small" style="text-align:left; margin:0 0 12px;"></div>
     <button id="btnNewMeeting" type="button">Iniciar nueva reunión</button>
   </div>
 </div>
@@ -246,6 +247,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   const btnSaveDur=document.getElementById("btnSaveDur");
   const btnSpin=document.getElementById("btnSpin");
   const conclusionPanel=document.getElementById("conclusionPanel");
+  const conclusionSummary=document.getElementById("conclusionSummary");
   const btnNewMeeting=document.getElementById("btnNewMeeting");
 
   // duración en minutos (persistida)
@@ -256,6 +258,8 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   // reunión: arrancan al primer giro
   let meetingStarted = false;
   let reunionFinalizada = false;
+  let turnoEnCursoId = null;
+  let spokenSecondsById = {};
 
   // --- Flip Clock (progresivo HH:MM) ---
   let globalSecs = 0;
@@ -329,6 +333,31 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   }
 
   function showConclusionPanel(){
+    const activosList = participantes.filter(p => p.activo);
+    const ranking = [];
+    const ausentes = [];
+
+    activosList.forEach(p => {
+      const secs = Math.max(0, Math.floor(spokenSecondsById[p.id] || 0));
+      if (secs < 10) {
+        ausentes.push({ nombre: p.nombre, segundos: secs });
+      } else {
+        ranking.push({ nombre: p.nombre, segundos: secs });
+      }
+    });
+
+    ranking.sort((a,b) => b.segundos - a.segundos || a.nombre.localeCompare(b.nombre, "es"));
+    ausentes.sort((a,b) => a.nombre.localeCompare(b.nombre, "es"));
+
+    const fmt = (secs) => `${String(Math.floor(secs/60)).padStart(2,"0")}:${String(secs%60).padStart(2,"0")}`;
+    const rankingHtml = ranking.length
+      ? `<strong>Participación (mayor a menor):</strong><br>${ranking.map((p, i) => `${i+1}. ${p.nombre} - ${fmt(p.segundos)}`).join("<br>")}`
+      : `<strong>Participación:</strong><br>Sin intervenciones de 10s o más.`;
+    const ausentesHtml = ausentes.length
+      ? `<br><br><strong>Ausentes (&lt; 10s):</strong><br>${ausentes.map(p => `${p.nombre} - ${fmt(p.segundos)}`).join("<br>")}`
+      : "";
+    conclusionSummary.innerHTML = `${rankingHtml}${ausentesHtml}`;
+
     reunionFinalizada = true;
     conclusionPanel.style.display = "flex";
   }
@@ -336,12 +365,24 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
   function hideConclusionPanel(){
     reunionFinalizada = false;
     conclusionPanel.style.display = "none";
+    conclusionSummary.innerHTML = "";
+  }
+
+  function commitCurrentTurnTime(){
+    if (!turnoEnCursoId) return;
+    const elapsed = (minutos * 60) + segundos;
+    if (elapsed > 0) {
+      spokenSecondsById[turnoEnCursoId] = (spokenSecondsById[turnoEnCursoId] || 0) + elapsed;
+    }
+    turnoEnCursoId = null;
   }
 
   function resetMeetingState(){
+    commitCurrentTurnTime();
     hideConclusionPanel();
     sorteadosSession = new Set();
     ultimoSorteado = null;
+    spokenSecondsById = {};
     resetCrono();
 
     if (flipClockInterval) {
@@ -607,6 +648,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
 
   // --- cronómetro por ganador ---
   function resetCrono(){ 
+    commitCurrentTurnTime();
     if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } 
     segundos=0; minutos=0; 
     cronoDiv.style.display = "none"; 
@@ -619,6 +661,7 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     if (!participant) return;
     if (timerInterval) clearInterval(timerInterval); 
     segundos=0; minutos=0; 
+    turnoEnCursoId = participant.id || null;
     cronoNameSpan.textContent = participant.nombre || "";
     cronoTimeSpan.textContent = "00:00";
     cronoTimeSpan.classList.remove("crono-yellow","crono-red");
@@ -728,11 +771,6 @@ href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 
     // Iniciar cronómetro y actualizar editor
     startCronoFor(ganador);
     rebuildEditor();
-
-    // Si era el último participante pendiente, mostrar conclusión.
-    if (activosList.length === 1) {
-      showConclusionPanel();
-    }
   }
 
   // Animación de desaceleración final y centrado (MODIFICACIÓN CLAVE)
