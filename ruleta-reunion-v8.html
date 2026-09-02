@@ -1,0 +1,677 @@
+<!-- Fragment ID: 20251015-10:00.1 -->
+<!-- RULETA-REUNION v8 -->
+<!-- Autor: Jorge Cribb -->
+<!-- Asistido por ChatGPT 5 -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Ruleta de Turnos - v8</title>
+<link rel="icon" type="image/svg+xml"
+href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%23B38CFF'/%3E%3Ccircle cx='50' cy='50' r='42' fill='%23FFFFFF'/%3E%3Cg%3E%3Cpath d='M50 50 L50 8 A42 42 0 0 1 78 20 Z' fill='%238FD4FF'/%3E%3Cpath d='M50 50 L78 20 A42 42 0 0 1 92 50 Z' fill='%23FFE38F'/%3E%3Cpath d='M50 50 L92 50 A42 42 0 0 1 78 80 Z' fill='%23FF8F70'/%3E%3Cpath d='M50 50 L78 80 A42 42 0 0 1 50 92 Z' fill='%23E58FFF'/%3E%3Cpath d='M50 50 L50 92 A42 42 0 0 1 22 80 Z' fill='%23FF8FC1'/%3E%3Cpath d='M50 50 L22 80 A42 42 0 0 1 8 50 Z' fill='%238FD4FF'/%3E%3Cpath d='M50 50 L8 50 A42 42 0 0 1 22 20 Z' fill='%23FFE38F'/%3E%3Cpath d='M50 50 L22 20 A42 42 0 0 1 50 8 Z' fill='%23FF8F70'/%3E%3C/g%3E%3Ccircle cx='50' cy='50' r='12' fill='%23CCC'/%3E%3Cpolygon points='50,15 43,2 57,2' fill='%23FFCC33'/%3E%3C/svg%3E">
+
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: Arial, system-ui, sans-serif; text-align:center; margin:0; padding:20px; background:#2E2F38; color:#eee; }
+  h1 { margin:0 0 8px; }
+
+  #ruletaContainer { display:inline-block; position:relative; }
+
+  canvas { background:#fff; border-radius:50%; box-shadow:0 0 12px rgba(0,0,0,.12) inset; }
+
+  .overlay { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; font-size:20px; font-weight:bold; background:#2E2F38; padding:6px 10px; border-radius:10px; display:none; color:#fff; text-align:center; }
+
+  button { padding:6px 12px; margin:4px; font-size:14px; border-radius:5px; border:0; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.12); background:#666; color:#fff; }
+  button.icon-btn { background:transparent; box-shadow:none; padding:4px; border-radius:6px; cursor:pointer;}
+
+  dialog { border-radius:8px; border:none; box-shadow:0 10px 40px rgba(0,0,0,.5); }
+  .dialog-content { padding:14px; width:420px; background:#1f2026; color:#eee; }
+  .dialog-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+
+  .p-item { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
+  .p-item input[type="text"] { flex:1; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,0.02); color:#fff; }
+  .p-item input[type="number"] { width:72px; padding:6px 6px; border-radius:6px; border:1px solid rgba(255,255,255,.06); background:rgba(255,255,255,0.02); color:#fff; }
+  .p-item label { font-size:13px; color:#ccc; margin-right:6px; }
+  .small { font-size:12px; color:#bbb; }
+  .badge { font-size:12px; color:#bbb; margin-left:6px; }
+
+  #participantList { max-height:260px; overflow:auto; margin-bottom:3px; }
+  #messages { height:18px; margin-top:6px; font-size:13px; color:#8f8; }
+
+  label { font-size:14px; margin-right:8px; }
+  input[type="number"] { padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,.08); width:80px; background:rgba(255,255,255,0.02); color:#fff; }
+
+  /* Batería (regresiva) */
+  #battery-container { font-family: Arial, sans-serif; text-align: center; width: 100px; height: 500px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+  #battery { width: 60px; height: 200px; border: 3px solid #333; border-radius: 6px; position: relative; background: #eee; display: flex; flex-direction: column-reverse; overflow: hidden; }
+  #battery::after { content: ""; position: absolute; top: -12px; left: 18px; width: 24px; height: 10px; background: #333; border-radius: 2px; }
+  #battery-level { width: 100%; height: 100%; background-color: limegreen; transition: height 1s linear, background-color 0.5s; }
+  #timer-text { margin-top: 12px; font-size: 18px; color: #fff; }
+
+  /* Flip Clock (progresivo HH:MM, inicia con primer giro) */
+  #flipClock { display:flex; gap:10px; align-items:center; }
+  #flipClock .digit, #flipClock .separator { position: relative; width:60px; height:90px; perspective:1000px; }
+  #flipClock .separator { display:flex; align-items:center; justify-content:center; font-size:60px; color:#00e6a8; width:30px; }
+  #flipClock .card { position:absolute; inset:0; background:#111827; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:60px; font-weight:bold; color:#fff; backface-visibility:hidden; }
+  #flipClock .flip .card.next { transform: rotateX(0deg); animation: flip 0.6s forwards; }
+  @keyframes flip { 0% { transform: rotateX(90deg); } 100% { transform: rotateX(0deg); } }
+
+  /* Layout principal */
+  .main-row { display:flex; justify-content:center; align-items:center; gap:20px; flex-wrap:wrap; }
+
+  /* Cronómetro styles for colors */
+  #cronometro { font-size:18px; line-height:1.2; text-align:center; color:#fff; pointer-events:auto; padding:16px 28px; border-radius:8px; background: rgba(0,0,0,0.65); }
+  #cronoTime { font-weight:bold; display:block; font-size:20px; color:inherit; }
+  .crono-yellow { color: #FFD54F !important; } /* amarillo */
+  .crono-red { color: #FF6B6B !important; } /* rojo */
+</style>
+</head>
+<body>
+
+<h1 style="display:flex;justify-content:center;align-items:center;gap:12px;">
+<br>
+</h1>
+
+<!-- Fila principal: Batería (izq) + Ruleta (centro) + Flip Clock (der) -->
+<div class="main-row">
+  <!-- Batería -->
+  <div id="battery-container">
+    <div id="battery">
+      <div id="battery-level"></div>
+    </div>
+    <div id="timer-text"></div>
+  <button id="btnEdit" class="icon-btn" title="Editar participantes y duración" aria-label="Editar participantes y duración">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="32" height="32">
+        <g id="Setting_Gear" data-name="Setting Gear">
+          <path fill="#888888" d="M64 28v8a4 4 0 0 1-4.26 4h-1.59a2 2 0 0 0-1.85 1.27c-.18.45-.36.9-.56 1.35a2 2 0 0 0 .41 2.21l1.31 1.31a4 4 0 0 1 0 5.66l-5.66 5.66a4 4 0 0 1-5.66 0l-2.31-2.31a24.79 24.79 0 0 1-2.57 1.15A2 2 0 0 0 40 58.15V60a4 4 0 0 1-4 4h-8a4 4 0 0 1-4-4.26v-1.59a2 2 0 0 0-1.27-1.85c-.45-.18-.9-.36-1.35-.56a2 2 0 0 0-2.21.41l-1.31 1.31a4 4 0 0 1-5.66 0L6.54 51.8a4 4 0 0 1 0-5.66l1.31-1.31a2 2 0 0 0 .41-2.21c-.2-.45-.38-.9-.56-1.35A2 2 0 0 0 5.85 40H4a4 4 0 0 1-4-4v-8a4 4 0 0 1 4.26-4h1.59a2 2 0 0 0 1.85-1.27c.18-.45.36-.9.56-1.35a2 2 0 0 0-.41-2.21l-1.31-1.31a4 4 0 0 1 0-5.66l5.66-5.66a4 4 0 0 1 5.66 0l1.31 1.31a2 2 0 0 0 2.21.41c.45-.2.9-.38 1.35-.56A2 2 0 0 0 24 5.85V4a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4.26v1.59a2 2 0 0 0 1.27 1.85c.45.18.9.36 1.35.56a2 2 0 0 0 2.21-.41l1.31-1.31a4 4 0 0 1 5.66 0l5.66 5.66a4 4 0 0 1 0 5.66l-1.31 1.31a2 2 0 0 0-.41 2.21c.2.45.38.9.56 1.35A2 2 0 0 0 58.15 24H60a4 4 0 0 1 4 4z"/>
+          <path fill="#cccccc" d="M62 57a5 5 0 0 1-8.45 3.62L32.71 39.78l7.07-7.07 20.67 20.67A5 5 0 0 1 62 57z"/>
+          <path fill="#cccccc" d="M36.18 43.25a12 12 0 0 1-15-16.43l8 8 4.24-1.42 1.42-4.24-8-8a12 12 0 0 1 16.43 15"/>
+          <path fill="#555555" d="M60 24c-1.64 0-3.12.27-3.7-1.26-.18-.46-.37-.93-.57-1.36a2 2 0 0 1 .41-2.22l1.31-1.31a4 4 0 0 0 0-5.64l-5.66-5.66a4 4 0 0 0-5.64 0l-1.32 1.31a2 2 0 0 1-2.19.41c-2.31-1.06-2.64-.53-2.64-4A4.05 4.05 0 0 0 36 0h-8a4 4 0 0 0-4 4c0 1.64.27 3.12-1.26 3.7-.46.18-.93.37-1.36.57a2 2 0 0 1-2.22-.41l-1.31-1.31a4 4 0 0 0-5.64 0l-5.66 5.66a4 4 0 0 0 0 5.64l1.31 1.32a2 2 0 0 1 .41 2.19c-1.06 2.31-.53 2.64-4 2.64A4.05 4.05 0 0 0 0 28v8a4 4 0 0 0 4 4c1.64 0 3.12-.27 3.7 1.26.18.46.37.93.57 1.36a2 2 0 0 1-.41 2.22l-1.31 1.31a4 4 0 0 0 0 5.64l5.66 5.66a4 4 0 0 0 5.64 0l1.32-1.31a2 2 0 0 1 2.19-.41c2.31 1.06 2.64.53 2.64 4A4.05 4.05 0 0 0 28 64h8a4 4 0 0 0 4-4 8.06 8.06 0 0 1 .14-2.6 2 2 0 1 0-3.72-1.46A9.81 9.81 0 0 0 36 60h-7.94a6.82 6.82 0 0 1-.06-1.85 6 6 0 0 0-3.84-5.59c-.37-.14-.75-.3-1.14-.47a6 6 0 0 0-6.68 1.23L15 54.63 9.37 49l1.31-1.3a6 6 0 0 0 1.23-6.7c-.17-.37-.33-.75-.47-1.13A6 6 0 0 0 5.85 36H4v-7.94A6.82 6.82 0 0 1 5.85 28a6 6 0 0 0 5.59-3.84c.14-.37.3-.75.47-1.14a6 6 0 0 0-1.23-6.68L9.37 15 15 9.37l1.3 1.31a6 6 0 0 0 6.7 1.23c.37-.17.75-.33 1.13-.47A6 6 0 0 0 28 5.85V4h7.94A6.82 6.82 0 0 1 36 5.85a6 6 0 0 0 3.84 5.59c.37.14.75.3 1.14.47a6 6 0 0 0 6.68-1.23L49 9.37 54.63 15l-1.31 1.3a6 6 0 0 0-1.23 6.7c.17.37.33.75.47 1.13A6 6 0 0 0 58.15 28H60v7.94c-.24.21-2.28-.24-4.1.48a2 2 0 1 0 1.46 3.72 6.4 6.4 0 0 1 2.37-.14A4.05 4.05 0 0 0 64 36v-8a4 4 0 0 0-4-4z"/>
+        </g>
+    </svg>
+  </button>
+  </div>
+
+  <!-- Ruleta -->
+  <div id="ruletaContainer" style="
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    gap:12px;
+    max-width:100vw;
+    max-height:100vh;
+    overflow:hidden;">
+    
+    <canvas id="ruleta" width="800" height="800" role="button"
+      aria-label="Ruleta - hacer clic en el triángulo rojo para girar"
+      style="
+        max-width: min(800px, 100vw - 50px);
+        max-height: min(800px, 100vh - 50px);
+        width:100%;
+        height:auto;">
+    </canvas>
+
+    <div id="cronometro" class="overlay" style="display:none;">
+      <!-- contenido dinámico: nombre y tiempo -->
+      <span>Ha sido sorteado el participante</span><br/>
+      <span id="cronoName"></span><br/>
+      <span id="cronoTime">00:00</span>
+    </div>
+  </div>
+
+
+  <!-- Flip Clock (HH:MM) -->
+  <div id="flipClock" aria-label="Tiempo transcurrido de la reunión (HH:MM)">
+    <div class="digit"><div class="card current">0</div><div class="card next">0</div></div>
+    <div class="digit"><div class="card current">0</div><div class="card next">0</div></div>
+    <div class="separator">:</div>
+    <div class="digit"><div class="card current">0</div><div class="card next">0</div></div>
+    <div class="digit"><div class="card current">0</div><div class="card next">0</div></div>
+  </div>
+</div>
+
+<!-- Dialog para edición: participantes + duración -->
+<dialog id="dlgEditor" aria-labelledby="dlgTitle">
+  <div class="dialog-content">
+    <div class="dialog-header">
+      <strong id="dlgTitle">Editar reunión</strong>
+      <div><button id="btnCloseDlg">X</button></div>
+    </div>
+
+    <div style="margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+      <label for="durInput">Duración total (min):</label>
+      <input id="durInput" type="number" min="1" value="120"/>
+      <button id="btnSaveDur">Guardar duración</button>
+    </div>
+
+    <div class="dialog-header">
+      <strong>Editar participantes</strong>
+    </div>
+    <div id="participantList"></div>
+
+    <div style="display:flex; gap:8px; margin-top:8px;">
+      <input id="newName" placeholder="Nuevo participante" />
+      <input id="newTime" type="number" min="1" placeholder="min" style="width:72px;" />
+      <button id="btnAdd">+</button>
+      <button id="btnSave">Guardar participantes</button>
+    </div>
+
+    <div id="messages" role="status" aria-live="polite"></div>
+  </div>
+</dialog>
+
+<script>
+  // --- Config / Estado ---
+  const STORAGE_KEY = "ruleta_participantes_v3"; // se mantiene clave
+  const STORAGE_DURACION = "ruleta_duracion_total";
+  const DEFAULT_DURATION = "45";
+  const DEFAULT_NAMES = []; // si querés nombres por defecto, agregalos aquí
+  let ultimoSorteado = null;
+
+
+  function uid(){ 
+    try { return crypto && crypto.randomUUID ? crypto.randomUUID() : null; } 
+    catch(e){} 
+    return Date.now().toString(36)+Math.random().toString(36).slice(2,8); 
+  }
+  function cleanName(s){ return (s||"").trim(); }
+
+  // participantes
+  let participantes = [];
+  let sorteadosSession = new Set();
+
+  // ruleta
+  let anguloActual = 0; let girando=false; let velocidad=0; let arc=2*Math.PI; const pointerAngle=-Math.PI/2;
+  const canvas=document.getElementById("ruleta"); const ctx=canvas.getContext("2d"); const size=canvas.width, center=size/2;
+  const outerMargin=50, pointerGap=6, pointerHalf=12;
+
+  // cronómetro por participante
+  let timerInterval=null; let segundos=0, minutos=0;
+  const cronoDiv=document.getElementById("cronometro");
+  const cronoNameSpan=document.getElementById("cronoName");
+  const cronoTimeSpan=document.getElementById("cronoTime");
+
+  // edición dialog
+  const btnEdit=document.getElementById("btnEdit");
+  const dlg=document.getElementById("dlgEditor");
+  const btnCloseDlg=document.getElementById("btnCloseDlg");
+  const participantListDiv=document.getElementById("participantList");
+  const newNameInput=document.getElementById("newName");
+  const newTimeInput=document.getElementById("newTime");
+  const btnAdd=document.getElementById("btnAdd");
+  const btnSave=document.getElementById("btnSave");
+  const messages=document.getElementById("messages");
+  const durInput=document.getElementById("durInput");
+  const btnSaveDur=document.getElementById("btnSaveDur");
+
+  // duración en minutos (persistida)
+  let duracionMin = parseInt(localStorage.getItem(STORAGE_DURACION) || DEFAULT_DURATION);
+  durInput.value = duracionMin;
+
+  // reunión: arrancan al primer giro
+  let meetingStarted = false;
+
+  // --- Flip Clock (progresivo HH:MM) ---
+  let globalSecs = 0;
+  let flipClockInterval = null;
+  function setDigit(digitElem, num){
+    const current = digitElem.querySelector(".card.current");
+    const next = digitElem.querySelector(".card.next");
+    if (current.textContent !== num) {
+      next.textContent = num;
+      digitElem.classList.add("flip");
+      setTimeout(() => {
+        current.textContent = num;
+        digitElem.classList.remove("flip");
+      }, 600);
+    }
+  }
+  function updateFlipClockFromSecs(secs){
+    const hh = Math.floor(secs / 3600);
+    const mm = Math.floor((secs % 3600) / 60);
+    const str = String(hh).padStart(2,"0") + String(mm).padStart(2,"0"); // HHMM
+    const digits = document.querySelectorAll("#flipClock .digit");
+    str.split("").forEach((d,i)=> setDigit(digits[i], d));
+  }
+  function startFlipClock(){
+    if (flipClockInterval) return;
+    updateFlipClockFromSecs(globalSecs);
+    flipClockInterval = setInterval(()=>{
+      globalSecs++;
+      updateFlipClockFromSecs(globalSecs);
+    }, 1000);
+  }
+
+  // --- Batería Timer (regresiva) ---
+  let batteryTotalSecs = duracionMin * 60;
+  let batteryRemaining = batteryTotalSecs;
+  const batteryLevel = document.getElementById("battery-level");
+  const timerText = document.getElementById("timer-text");
+  let batteryInterval = null;
+
+  function applyBatteryColor(percent){
+    if (percent > 50) {
+      batteryLevel.style.backgroundColor = "limegreen";
+    } else if (percent > 10) {
+      batteryLevel.style.backgroundColor = "gold";
+    } else {
+      batteryLevel.style.backgroundColor = "red";
+    }
+  }
+  function updateBatteryUI(){
+    const percent = batteryTotalSecs > 0 ? (batteryRemaining / batteryTotalSecs) * 100 : 0;
+    batteryLevel.style.height = Math.max(0, percent) + "%";
+    applyBatteryColor(percent);
+    const minutes = Math.floor(batteryRemaining / 60);
+    const seconds = batteryRemaining % 60;
+    timerText.textContent = `${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+  }
+  function startBatteryTimer(){
+    if (batteryInterval) return;
+    updateBatteryUI();
+    batteryInterval = setInterval(()=>{
+      if (batteryRemaining > 0){
+        batteryRemaining--;
+        updateBatteryUI();
+      } else {
+        clearInterval(batteryInterval);
+        batteryInterval = null;
+        batteryRemaining = 0;
+        updateBatteryUI();
+      }
+    }, 1000);
+  }
+
+  // --- Storage / carga participantes (compatibilidad con versiones previas) ---
+  function loadParticipantsFromStorage(){ 
+    let raw=null; 
+    try{ raw=localStorage.getItem(STORAGE_KEY);}catch(e){raw=null;} 
+    if(!raw){ 
+      participantes = DEFAULT_NAMES.map(n => ({ id: uid(), nombre: n, activo: true, tiempo: 5 }));
+      return;
+    } 
+    try{ 
+      const parsed=JSON.parse(raw); 
+      if(!Array.isArray(parsed)) throw new Error("no-array"); 
+      participantes = parsed.map(it => {
+        // soporta formatos antiguos (string, objeto sin campos nuevos)
+        if (typeof it === "string") {
+          return { id: uid(), nombre: it, activo: true, tiempo: 5 };
+        }
+        const nombre = it.nombre || it.name || "";
+        const id = it.id || uid();
+        // mantener activo si viene explícito, sino true por defecto
+        const activo = (typeof it.activo === "boolean") ? it.activo : true;
+        // tiempo si viene (número), si viene como string, parsearlo; si no, default 5
+        let tiempo = 5;
+        if (typeof it.tiempo === "number" && Number.isFinite(it.tiempo)) tiempo = Math.max(1, Math.round(it.tiempo));
+        else if (typeof it.tiempo === "string" && it.tiempo.trim() !== "") {
+          const v = parseInt(it.tiempo);
+          if (!isNaN(v) && v > 0) tiempo = v;
+        }
+        return { id, nombre, activo, tiempo };
+      }).filter(p => cleanName(p.nombre).length > 0);
+      if(participantes.length === 0) participantes = DEFAULT_NAMES.map(n => ({ id: uid(), nombre: n, activo: true, tiempo: 5 }));
+    }catch(e){ 
+      participantes = DEFAULT_NAMES.map(n => ({ id: uid(), nombre: n, activo: true, tiempo: 5 }));
+    } 
+  }
+
+  function saveParticipantsToStorage(){ 
+    try{
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(participantes));
+      showMessage("Guardado correctamente.");
+    }catch(e){ console.error(e); showMessage("No se pudo guardar: "+e,true); }
+  }
+
+  // --- UI editor ---
+  function rebuildEditor(){
+    participantListDiv.innerHTML = "";
+    if (participantes.length === 0) {
+      participantListDiv.innerHTML = '<div class="small">No hay participantes.</div>';
+      return;
+    }
+    participantes.forEach((p, idx) => {
+      const row = document.createElement("div");
+      row.className = "p-item";
+
+      // checkbox activo
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.title = "Activo para sorteo";
+      chk.checked = (typeof p.activo === "boolean") ? p.activo : true;
+      chk.addEventListener("change", () => {
+        participantes[idx].activo = chk.checked;
+        saveParticipantsToStorage();
+        actualizarGeometria();
+        dibujarRuleta();
+      });
+
+      // name input
+      const input = document.createElement("input");
+      input.type = "text"; input.value = p.nombre;
+      input.addEventListener("input", () => { participantes[idx].nombre = input.value; });
+
+      // tiempo input (minutos)
+      const timeInput = document.createElement("input");
+      timeInput.type = "number";
+      timeInput.min = "1";
+      timeInput.value = (typeof p.tiempo === "number" && p.tiempo > 0) ? p.tiempo : 5;
+      timeInput.title = "Tiempo estimado (min)";
+      timeInput.style.width = "64px";
+      timeInput.addEventListener("input", () => {
+        const v = parseInt(timeInput.value);
+        participantes[idx].tiempo = (isNaN(v) || v < 1) ? 1 : v;
+      });
+
+      // badge (sorteado)
+      const badge = document.createElement("span"); badge.className = "badge";
+      if (sorteadosSession.has(p.id)) badge.textContent = "(sorteado)";
+
+      // delete button
+      const btnDel = document.createElement("button"); btnDel.textContent = "-";
+      btnDel.title = "Eliminar participante";
+      btnDel.addEventListener("click", () => {
+        if (!confirm(`Eliminar "${p.nombre}" de la lista?`)) return;
+        participantes.splice(idx,1);
+        saveParticipantsToStorage();
+        rebuildEditor();
+        actualizarGeometria();
+        dibujarRuleta();
+      });
+
+      // append: checkbox, input, timeInput, badge, delete
+      row.appendChild(chk);
+      row.appendChild(input);
+      row.appendChild(timeInput);
+      row.appendChild(badge);
+      row.appendChild(btnDel);
+
+      participantListDiv.appendChild(row);
+    });
+  }
+  function openEditor(){
+    rebuildEditor();
+    durInput.value = duracionMin;
+    try { dlg.showModal(); } catch(e) { dlg.setAttribute("open",""); }
+    newNameInput.focus();
+  }
+  function closeEditor(){ try{ dlg.close(); }catch(e){ dlg.removeAttribute("open"); } }
+  btnEdit.addEventListener("click", openEditor);
+  btnCloseDlg.addEventListener("click", closeEditor);
+  dlg.addEventListener("cancel", ev => { ev.preventDefault(); closeEditor(); });
+
+  const btnAddHandler = () => {
+    const v = cleanName(newNameInput.value);
+    const t = parseInt(newTimeInput.value || "5");
+    if (!v) { showMessage("Ingresa un nombre.", true); return; }
+    const tiempoVal = (!isNaN(t) && t > 0) ? t : 5;
+    participantes.push({ id: uid(), nombre: v, activo: true, tiempo: tiempoVal });
+    newNameInput.value = "";
+    newTimeInput.value = "";
+    saveParticipantsToStorage();
+    rebuildEditor();
+    actualizarGeometria();
+    dibujarRuleta();
+  };
+  btnAdd.addEventListener("click", btnAddHandler);
+  newNameInput.addEventListener("keydown", e => { if (e.key === "Enter") btnAddHandler(); });
+  newTimeInput.addEventListener("keydown", e => { if (e.key === "Enter") btnAddHandler(); });
+
+  btnSave.addEventListener("click", () => {
+    // normalizar estructura
+    participantes = participantes.map(p => ({
+      id: p.id || uid(),
+      nombre: cleanName(p.nombre),
+      activo: (typeof p.activo === "boolean") ? p.activo : true,
+      tiempo: (typeof p.tiempo === "number" && p.tiempo > 0) ? Math.max(1, Math.round(p.tiempo)) : 5
+    })).filter(p => p.nombre.length > 0);
+    saveParticipantsToStorage();
+    rebuildEditor();
+    actualizarGeometria();
+    dibujarRuleta();
+  });
+
+  function showMessage(msg, isError=false){
+    messages.textContent = msg;
+    messages.style.color = isError ? "#f88" : "#8f8";
+    setTimeout(() => { messages.textContent = ""; }, 2000);
+  }
+
+  // --- geometría y dibujo ruleta ---
+  function activos(){ return participantes.filter(p => p.activo && !sorteadosSession.has(p.id)); }
+  function actualizarGeometria(){ const n=Math.max(1, activos().length); arc=2*Math.PI/n; }
+  function normalizar(a){ a=a%(2*Math.PI); return (a+2*Math.PI)%(2*Math.PI); }
+  function colorDeSector(i,n){ const h=Math.round((360*i)/Math.max(1,n)); return `hsl(${h} 80% 60%)`; }
+
+  function dibujarRuleta(){
+    ctx.clearRect(0,0,size,size);
+    const activosList = activos();
+    const r = center - outerMargin;
+    const topY = center - r;
+
+    if (activosList.length === 0) {
+      ctx.beginPath(); ctx.arc(center, center, r, 0, 2*Math.PI); ctx.fillStyle = "#eee"; ctx.fill();
+      ctx.fillStyle = "#111"; ctx.font = "bold 16px Arial"; ctx.textAlign = "center";
+      ctx.fillText("No hay participantes por sortear", center, center);
+    } else {
+      activosList.forEach((p,i) => {
+        const inicio = anguloActual + i * arc;
+        const fin = inicio + arc;
+        ctx.beginPath(); ctx.moveTo(center, center);
+        ctx.arc(center, center, r, inicio, fin, false);
+        ctx.closePath();
+        ctx.fillStyle = colorDeSector(i, activosList.length);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,.15)"; ctx.lineWidth = 2; ctx.stroke();
+
+        ctx.save(); ctx.translate(center, center); ctx.rotate(inicio + arc/2);
+        ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillStyle = "#111"; ctx.font = "bold 24px Arial";
+        ctx.fillText(p.nombre, r - 18, 0);
+        ctx.restore();
+      });
+    }
+
+    // flecha roja
+    ctx.beginPath();
+    ctx.moveTo(center - pointerHalf, topY - pointerGap - 24);
+    ctx.lineTo(center + pointerHalf, topY - pointerGap - 24);
+    ctx.lineTo(center, topY - pointerGap);
+    ctx.closePath(); ctx.fillStyle = "#ff0000"; ctx.fill();
+
+    // borde
+    ctx.beginPath(); ctx.arc(center, center, r, 0, 2*Math.PI);
+    ctx.lineWidth = 6; ctx.strokeStyle = "#222"; ctx.stroke();
+  }
+
+  function indiceSeleccionadoPorFlecha(){
+    const activosList = activos();
+    if (activosList.length === 0) return -1;
+    const relativo = normalizar(pointerAngle - anguloActual);
+    const idx = Math.floor((relativo + 1e-9) / arc) % activosList.length;
+    return idx;
+  }
+
+  // --- cronómetro por ganador ---
+  function resetCrono(){ 
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } 
+    segundos=0; minutos=0; 
+    cronoDiv.style.display = "none"; 
+    cronoNameSpan.textContent = "";
+    cronoTimeSpan.textContent = "00:00";
+    cronoTimeSpan.classList.remove("crono-yellow","crono-red");
+    cronoDiv.classList.remove("crono-yellow","crono-red");
+  }
+  function startCronoFor(participant){ 
+    if (!participant) return;
+    if (timerInterval) clearInterval(timerInterval); 
+    segundos=0; minutos=0; 
+    cronoNameSpan.textContent = participant.nombre || "";
+    cronoTimeSpan.textContent = "00:00";
+    cronoTimeSpan.classList.remove("crono-yellow","crono-red");
+    cronoDiv.classList.remove("crono-yellow","crono-red");
+    cronoDiv.style.display = "block"; 
+    // mostrar también el tiempo estimado (opcional; aquí se deja en title)
+    cronoDiv.title = "Tiempo estimado: " + (participant.tiempo || "N/A") + " min";
+    const totalSegs = (typeof participant.tiempo === "number" && participant.tiempo > 0) ? participant.tiempo * 60 : null;
+
+    timerInterval = setInterval(() => { 
+      segundos++; 
+      if (segundos === 60) { segundos = 0; minutos++; } 
+      const formato = (minutos < 10 ? "0"+minutos : minutos) + ":" + (segundos < 10 ? "0"+segundos : segundos); 
+      cronoTimeSpan.textContent = formato;
+
+      // colores según % del tiempo estimado: 50% -> amarillo, 90% -> rojo
+      if (totalSegs) {
+        const elapsed = minutos*60 + segundos;
+        const pct = elapsed / totalSegs;
+        cronoTimeSpan.classList.remove("crono-yellow","crono-red");
+        cronoDiv.classList.remove("crono-yellow","crono-red");
+        if (pct >= 0.9) {
+          cronoTimeSpan.classList.add("crono-red");
+          cronoDiv.classList.add("crono-red");
+        } else if (pct >= 0.5) {
+          cronoTimeSpan.classList.add("crono-yellow");
+          cronoDiv.classList.add("crono-yellow");
+        } else {
+          // default color (heredado)
+        }
+      }
+    }, 1000); 
+  }
+
+  // --- giro / mostrar ganador ---
+  function girarRuleta(){
+    const activosList = activos();
+    if (girando) return;
+    if (activosList.length === 0) { dibujarRuleta(); return; }
+
+    // Primer giro: arranca FlipClock + Batería
+    if (!meetingStarted) {
+      meetingStarted = true;
+      // sincronizar duración/batería
+      batteryTotalSecs = duracionMin * 60;
+      batteryRemaining = batteryTotalSecs;
+      updateBatteryUI();
+      startBatteryTimer();
+      startFlipClock();
+    }
+
+    resetCrono();
+    velocidad = Math.random() * 0.22 + 0.28;
+    girando = true;
+    requestAnimationFrame(actualizar);
+  }
+
+  function mostrarGanador(){
+    const activosList = activos();
+    const idx = indiceSeleccionadoPorFlecha();
+    if (idx < 0 || idx >= activosList.length) return;
+    const ganador = activosList[idx];
+    sorteadosSession.add(ganador.id);
+    // arrancar cronómetro con el objeto ganador (para acceder a su tiempo estimado)
+    startCronoFor(ganador);
+    rebuildEditor();
+    actualizarGeometria();
+    dibujarRuleta();
+  }
+
+  function actualizar(){
+    if (!girando) return;
+    anguloActual += velocidad;
+    velocidad *= 0.985;
+    if (Math.abs(velocidad) < 0.003) {
+      girando = false;
+      velocidad = 0;
+      mostrarGanador();
+      return;
+    }
+    dibujarRuleta();
+    requestAnimationFrame(actualizar);
+  }
+
+  // Interacciones canvas (cursor y click sobre flecha)
+  canvas.addEventListener("mousemove", function(e){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / canvas.clientWidth;
+    const scaleY = canvas.height / canvas.clientHeight;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    const r = center - outerMargin;
+    const topY = center - r;
+    const triX1 = center - pointerHalf, triY1 = topY - pointerGap - 24;
+    const triX2 = center + pointerHalf, triY2 = topY - pointerGap - 24;
+    const triY3 = topY - pointerGap;
+    if (x >= triX1 && x <= triX2 && y >= triY1 && y <= triY3) canvas.style.cursor = "pointer";
+    else canvas.style.cursor = "default";
+  });
+  canvas.addEventListener("click", function(e){
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / canvas.clientWidth;
+    const scaleY = canvas.height / canvas.clientHeight;
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+     
+    const r = center - outerMargin;
+    const topY = center - r;
+    const triX1 = center - pointerHalf, triY1 = topY - pointerGap - 24;
+    const triX2 = center + pointerHalf, triY2 = topY - pointerGap - 24;
+    const triY3 = topY - pointerGap;
+    if (x >= triX1 && x <= triX2 && y >= triY1 && y <= triY3) { girarRuleta(); }
+  });
+
+  // --- duración / storage ---
+  btnSaveDur.addEventListener("click", ()=>{
+    const v = parseInt(durInput.value || DEFAULT_DURATION);
+    if (isNaN(v) || v < 1) { showMessage("Duración inválida", true); return; }
+    duracionMin = v;
+    localStorage.setItem(STORAGE_DURACION, duracionMin);
+    // Si la reunión aún no empezó, actualizo la batería inicial mostrada
+    if (!meetingStarted) {
+      batteryTotalSecs = duracionMin * 60;
+      batteryRemaining = batteryTotalSecs;
+      updateBatteryUI();
+    }
+    showMessage("Duración guardada: " + duracionMin + " min");
+  });
+
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_KEY) {
+      loadParticipantsFromStorage();
+      sorteadosSession = new Set();
+      rebuildEditor();
+      actualizarGeometria();
+      dibujarRuleta();
+    } else if (e.key === STORAGE_DURACION) {
+      duracionMin = parseInt(localStorage.getItem(STORAGE_DURACION) || DEFAULT_DURATION);
+      durInput.value = duracionMin;
+      if (!meetingStarted) {
+        batteryTotalSecs = duracionMin * 60;
+        batteryRemaining = batteryTotalSecs;
+        updateBatteryUI();
+      }
+    }
+  });
+
+  // Init
+  loadParticipantsFromStorage();
+  sorteadosSession = new Set();
+  // ensure structure is normalized and saved
+  participantes = participantes.map(p => ({
+    id: p.id || uid(),
+    nombre: cleanName(p.nombre),
+    activo: (typeof p.activo === "boolean") ? p.activo : true,
+    tiempo: (typeof p.tiempo === "number" && p.tiempo > 0) ? Math.max(1, Math.round(p.tiempo)) : 5
+  }));
+  saveParticipantsToStorage();
+
+  actualizarGeometria();
+  dibujarRuleta();
+  updateBatteryUI(); // mostrar carga inicial según duración
+  // Flip Clock se mantiene en 00:00 (HH:MM) hasta que empiece la reunión
+  updateFlipClockFromSecs(0);
+</script>
+</body>
+</html>
